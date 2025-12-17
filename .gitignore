@@ -1,0 +1,44 @@
+# Logs
+logs/
+*.log
+
+# Air hot reload
+tmp/
+build-errors.log
+
+# Build outputs
+dist/
+main
+
+.idea/*
+*.local
+*.yaml
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+out/
+# Configuration files (keep sample files)
+
+
+
+# OS
+Thumbs.db
+
+bin/
+geo/

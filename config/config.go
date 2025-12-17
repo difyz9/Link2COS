@@ -20,6 +20,7 @@ type COSConfig struct {
 	Region     string `yaml:"region"`      // 例如: ap-guangzhou
 	BucketURL  string `yaml:"-"`           // 自动拼接: https://bucketname.cos.region.myqcloud.com
 	URLPrefix  string `yaml:"url_prefix"`  // 例如: https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/
+	Proxy      string `yaml:"proxy"`       // HTTP/HTTPS代理，例如: http://127.0.0.1:7890
 }
 
 // LoadConfig 从文件加载配置
@@ -50,6 +51,11 @@ func LoadConfig(configPath string) (*Config, error) {
 
 	// 根据 BucketName 和 Region 拼接 BucketURL
 	config.COS.BucketURL = fmt.Sprintf("https://%s.cos.%s.myqcloud.com", config.COS.BucketName, config.COS.Region)
+
+	// 代理配置是可选的
+	if config.COS.Proxy != "" {
+		fmt.Printf("已配置代理: %s\n", config.COS.Proxy)
+	}
 
 	return &config, nil
 }

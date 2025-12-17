@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/difyz9/Link2COS/config"
 	"github.com/spf13/cobra"
@@ -88,7 +89,7 @@ func runUpload(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// initCOSClient 初始化COS客户端
+// initCOSClient 初始化COS客户端（上传到国内COS不需要代理）
 func initCOSClient(cfg *config.Config) (*cos.Client, error) {
 	u, err := url.Parse(cfg.COS.BucketURL)
 	if err != nil {
@@ -96,14 +97,42 @@ func initCOSClient(cfg *config.Config) (*cos.Client, error) {
 	}
 
 	b := &cos.BaseURL{BucketURL: u}
+	
+	// 上传到腾讯云 COS 不使用代理，直连更快
 	client := cos.NewClient(b, &http.Client{
 		Transport: &cos.AuthorizationTransport{
 			SecretID:  cfg.COS.SecretID,
 			SecretKey: cfg.COS.SecretKey,
 		},
+		Timeout: 300 * time.Second,
 	})
 
 	return client, nil
+}
+
+// createHTTPClient 创建支持代理的 HTTP 客户端（用于下载文件）
+func createHTTPClient(proxyURL string) *http.Client {
+	transport := &http.Transport{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     90 * time.Second,
+	}
+
+	// 如果配置了代理，设置代理（用于下载海外文件）
+	if proxyURL != "" {
+		proxy, err := url.Parse(proxyURL)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "警告: 代理URL解析失败: %v\n", err)
+		} else {
+			transport.Proxy = http.ProxyURL(proxy)
+			fmt.Printf("✓ 下载使用代理: %s\n", proxyURL)
+		}
+	}
+
+	return &http.Client{
+		Transport: transport,
+		Timeout:   300 * time.Second, // 5分钟超时
+	}
 }
 
 // readLinksFromFile 从文件中读取链接
@@ -139,8 +168,11 @@ func processLink(client *cos.Client, cfg *config.Config, link string) error {
 		return err
 	}
 
+	// 创建支持代理的 HTTP 客户端用于下载
+	httpClient := createHTTPClient(cfg.COS.Proxy)
+
 	// 先获取文件大小
-	fileSize, err := getRemoteFileSize(link)
+	fileSize, err := getRemoteFileSizeWithProxy(link, httpClient)
 	if err != nil {
 		return fmt.Errorf("获取文件大小失败: %w", err)
 	}
@@ -148,7 +180,7 @@ func processLink(client *cos.Client, cfg *config.Config, link string) error {
 	fmt.Printf("  文件大小: %.2f MB\n", float64(fileSize)/(1024*1024))
 
 	// 下载文件
-	resp, err := http.Get(link)
+	resp, err := httpClient.Get(link)
 	if err != nil {
 		return fmt.Errorf("下载失败: %w", err)
 	}
@@ -178,9 +210,9 @@ func getCOSPath(prefix, link string) (string, error) {
 	return relativePath, nil
 }
 
-// getRemoteFileSize 获取远程文件大小
-func getRemoteFileSize(url string) (int64, error) {
-	resp, err := http.Head(url)
+// getRemoteFileSizeWithProxy 获取远程文件大小（支持代理）
+func getRemoteFileSizeWithProxy(url string, client *http.Client) (int64, error) {
+	resp, err := client.Head(url)
 	if err != nil {
 		return 0, err
 	}

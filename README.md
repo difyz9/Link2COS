@@ -501,6 +501,51 @@ cos:
 
 代理仅用于文件下载，上传到 COS 不使用代理（直连更快）。
 
+## 🏗️ 项目结构
+
+```
+Link2COS/
+├── cmd/                          # 命令行接口层
+│   ├── root.go                  # 根命令
+│   ├── sync.go                  # sync 命令：下载并上传到 COS
+│   ├── download.go              # download 命令：纯下载
+│   └── upload.go                # upload 命令：上传本地文件
+│
+├── internal/                     # 内部业务逻辑（不对外暴露）
+│   ├── constants/               # 常量定义
+│   │   └── constants.go
+│   │
+│   ├── cos/                     # COS 相关功能
+│   │   ├── client.go            # COS 客户端初始化
+│   │   └── uploader.go          # 文件上传逻辑（分块/普通）
+│   │
+│   ├── download/                # 下载相关功能
+│   │   ├── client.go            # HTTP 客户端创建（支持代理）
+│   │   └── downloader.go        # 文件下载逻辑
+│   │
+│   ├── tracker/                 # 链接追踪
+│   │   └── link_tracker.go      # 已下载链接管理（去重）
+│   │
+│   └── util/                    # 通用工具
+│       └── file.go              # 文件读取工具
+│
+├── config/                       # 配置管理
+│   └── config.go                # 配置文件解析
+│
+├── main.go                       # 程序入口
+├── config.yaml                   # 配置文件示例
+├── Makefile                      # 构建脚本
+└── README.md                     # 项目文档
+```
+
+**设计特点：**
+- **职责分离**：命令层、业务逻辑层、配置层各司其职
+- **模块化**：每个功能独立成包，便于维护和测试
+- **可复用**：内部包可被多个命令复用
+- **Go 规范**：遵循 Go 项目标准布局
+
+---
+
 ## 📚 依赖项
 
 - [github.com/spf13/cobra](https://github.com/spf13/cobra) - 命令行框架

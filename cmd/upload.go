@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 
 	"github.com/difyz9/Link2COS/config"
+	"github.com/difyz9/Link2COS/internal/constants"
+	"github.com/difyz9/Link2COS/internal/cos"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +29,7 @@ func init() {
 	rootCmd.AddCommand(uploadCmd)
 	uploadCmd.Flags().StringVarP(&localFile, "file", "f", "", "本地文件路径（必填）")
 	uploadCmd.Flags().StringVarP(&remotePath, "path", "p", "", "COS存储路径（可选，默认使用文件名）")
-	uploadCmd.Flags().StringVarP(&uploadConfig, "config", "c", "config.yaml", "配置文件路径（默认: config.yaml）")
+	uploadCmd.Flags().StringVarP(&uploadConfig, "config", "c", constants.DefaultConfigFile, "配置文件路径（默认: config.yaml）")
 	uploadCmd.MarkFlagRequired("file")
 }
 
@@ -44,7 +46,7 @@ func runLocalUpload(cmd *cobra.Command, args []string) error {
 	}
 
 	// 初始化COS客户端
-	cosClient, err := initCOSClient(cfg)
+	cosClient, err := cos.InitClient(cfg)
 	if err != nil {
 		return fmt.Errorf("初始化COS客户端失败: %w", err)
 	}
@@ -68,7 +70,7 @@ func runLocalUpload(cmd *cobra.Command, args []string) error {
 	fmt.Printf("COS路径: %s\n", cosPath)
 
 	// 使用统一的上传器
-	uploader := NewUploader(cosClient)
+	uploader := cos.NewUploader(cosClient)
 	if err := uploader.UploadFile(localFile, cosPath); err != nil {
 		return fmt.Errorf("上传失败: %w", err)
 	}

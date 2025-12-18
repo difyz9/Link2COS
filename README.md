@@ -7,9 +7,15 @@
 - **大文件（≥ 100MB）**：并发分块上传（10MB/块），支持断点续传
 - **自动选择**：根据文件大小自动选择最优上传方式
 
-### 📦 双模式支持
-- **`sync` 模式**：从 URL 批量下载并上传到 COS，支持路径映射
+### 📦 三种模式支持
+- **`sync` 模式**：从 URL 批量下载并上传到 COS，支持路径映射和链接去重
+- **`download` 模式**：纯下载模式，将链接文件下载到本地，支持链接去重
 - **`upload` 模式**：直接上传本地文件，可指定 COS 存储路径
+
+### 🔄 链接去重功能
+- 自动记录已下载的链接到本地文件
+- 重复运行时自动跳过已下载的链接
+- 避免重复下载，节省时间和带宽
 
 ### ⚡ 性能优化
 - 并发分块上传（最多 5 个分块同时上传）
@@ -27,6 +33,8 @@
 - 📊 **数据备份迁移**：批量迁移服务器日志、备份文件到云端
 - 🔄 **CI/CD 集成**：自动化构建产物上传到对象存储
 - 📦 **模型文件管理**：AI 模型文件、大数据集的云端存储
+- 🔁 **断点续传场景**：利用链接去重功能，中断后重新运行自动跳过已下载文件
+- 💾 **本地归档**：使用 download 命令批量下载远程资源到本地存储
 
 ## 📥 快速开始
 
@@ -78,6 +86,9 @@ EOF
 # 3. 从 URL 批量下载上传
 echo "https://example.com/files/data.bin" > links.txt
 ./link2cos sync -i links.txt
+
+# 4. 批量下载到本地（不上传）
+./link2cos download -i links.txt -o downloads
 ```
 
 ## ⚙️ 配置
@@ -107,6 +118,7 @@ cos:
 | `bucket_name` | ✅ | 存储桶名称（格式：name-appid） | `mybucket-1234567890` |
 | `region` | ✅ | COS 地域（[地域列表](https://cloud.tencent.com/document/product/436/6224)） | `ap-guangzhou` |
 | `url_prefix` | ⚠️ | URL 前缀（仅 sync 命令需要） | `https://example.com/` |
+| `proxy` | ⚠️ | 代理地址（下载时使用，可选） | `http://127.0.0.1:7890` |
 
 **常用地域代码：**
 - `ap-guangzhou`（广州）
@@ -124,10 +136,10 @@ cos:
 link2cos [command] [flags]
 
 可用命令：
-  sync        批量下载 URL 并上传到 COS
+  sync        批量下载 URL 并上传到 COS（支持链接去重）
+  download    批量下载 URL 到本地目录（支持链接去重）
   upload      上传本地文件到 COS
   help        查看帮助信息
-  version     查看版本信息
 
 全局参数：
   -c, --config    配置文件路径（默认：config.yaml）
@@ -136,7 +148,7 @@ link2cos [command] [flags]
 
 ### 1. sync - 批量下载上传
 
-从文件中读取 URL 列表，下载后上传到 COS：
+从文件中读取 URL 列表，下载后上传到 COS（支持链接去重）：
 
 ```bash
 # 使用默认配置文件
@@ -149,6 +161,25 @@ link2cos [command] [flags]
 **参数说明：**
 - `-i, --input`：输入文件路径（必填）
 - `-c, --config`：配置文件路径（可选，默认 `config.yaml`）
+
+**链接去重机制：**
+- 所有成功下载的链接会记录在 `.link2cos_downloaded.txt` 文件中
+- 再次运行时，已下载的链接会自动跳过
+- 输出统计会显示：成功、失败、跳过的数量
+
+**输出示例：**
+```
+已下载链接数: 15
+共找到 20 个链接
+[1/20] 处理: https://example.com/file1.bin
+  ⊘ 跳过（已下载）
+[2/20] 处理: https://example.com/file2.bin
+  文件大小: 256.50 MB
+  策略: 分块上传
+  ✓ 成功
+
+完成: 成功 5, 失败 0, 跳过 15
+```
 
 **输入文件格式：**
 
@@ -170,7 +201,48 @@ https://example.com/files/file3.bin
 | `https://huggingface.co/models/main/` | `https://huggingface.co/models/main/weights/model.safetensors` | `weights/model.safetensors` |
 | `https://example.com/data/` | `https://example.com/data/2024/file.bin` | `2024/file.bin` |
 
-### 2. upload - 上传本地文件
+### 2. download - 批量下载到本地
+
+从文件中读取 URL 列表，下载到本地目录（支持链接去重）：
+
+```bash
+# 使用默认配置和输出目录
+./link2cos download -i links.txt
+
+# 指定输出目录
+./link2cos download -i links.txt -o /path/to/output
+
+# 指定配置文件
+./link2cos download -i links.txt -o downloads -c /path/to/config.yaml
+```
+
+**参数说明：**
+- `-i, --input`：输入文件路径（必填）
+- `-o, --output`：下载文件保存目录（可选，默认 `downloads`）
+- `-c, --config`：配置文件路径（可选，默认 `config.yaml`）
+
+**特点：**
+- 纯下载模式，不上传到 COS
+- 支持链接去重，避免重复下载
+- 自动创建输出目录
+- 文件名从 URL 中自动提取
+
+**输出示例：**
+```
+已下载链接数: 10
+共找到 15 个链接
+下载目录: downloads
+[1/15] 下载: https://example.com/model.bin
+  文件大小: 128.50 MB
+  保存路径: downloads/model.bin
+  ✓ 成功
+
+完成: 成功 5, 失败 0, 跳过 10
+```
+
+---
+
+### 3. upload - 上传本地文件
 
 直接上传本地文件到 COS：
 
@@ -257,7 +329,7 @@ GOOS=windows GOARCH=amd64 go build -o link2cos-windows-amd64.exe
 
 ## 💡 使用技巧
 
-### 1. 批量上传示例
+### 1. 批量下载并上传到 COS
 
 准备 `links.txt`：
 ```txt
@@ -271,7 +343,28 @@ https://huggingface.co/models/main/tokenizer.json
 ./link2cos sync -i links.txt
 ```
 
-### 2. 本地文件上传到指定路径
+重复运行会自动跳过已下载的文件。
+
+---
+
+### 2. 纯下载模式（不上传到 COS）
+
+```bash
+# 下载到默认目录 downloads
+./link2cos download -i links.txt
+
+# 下载到指定目录
+./link2cos download -i links.txt -o /data/models
+```
+
+适用场景：
+- 只需要下载文件到本地，不需要上传
+- 批量下载模型文件到服务器
+- 定期同步远程资源
+
+---
+
+### 3. 本地文件上传到指定路径
 
 ```bash
 # 上传到根目录
@@ -286,14 +379,47 @@ for file in *.bin; do
 done
 ```
 
-### 3. 使用不同的配置文件
+---
+
+### 4. 使用代理下载海外资源
+
+在 `config.yaml` 中配置代理：
+
+```yaml
+cos:
+  # ... 其他配置
+  proxy: "http://127.0.0.1:7890"  # 或 socks5://127.0.0.1:1080
+```
+
+然后正常使用 sync 或 download 命令，下载时会自动使用代理。
+
+---
+
+### 5. 使用不同的配置文件
 
 ```bash
 # 生产环境
-./link2cos upload -f file.bin -c config-prod.yaml
+./link2cos sync -i links.txt -c config-prod.yaml
 
 # 测试环境
-./link2cos upload -f file.bin -c config-test.yaml
+./link2cos download -i links.txt -c config-test.yaml
+
+# 开发环境
+./link2cos upload -f file.bin -c config-dev.yaml
+```
+
+---
+
+### 6. 清除下载记录
+
+如果需要重新下载所有文件：
+
+```bash
+# 删除下载记录文件
+rm .link2cos_downloaded.txt
+
+# 然后重新运行命令
+./link2cos sync -i links.txt
 ```
 
 ## 🐛 常见问题
@@ -334,11 +460,46 @@ done
 
 ---
 
-### Q5: sync 命令下载失败？
+### Q5: sync 或 download 命令下载失败？
 
 - 检查 URL 是否可访问（浏览器测试）
-- 某些海外链接需要科学上网
-- 确保链接以配置的 `url_prefix` 开头
+- 某些海外链接需要配置代理（在 `config.yaml` 中设置 `proxy`）
+- 确保链接以配置的 `url_prefix` 开头（仅 sync 命令）
+
+---
+
+### Q6: 链接去重记录存储在哪里？
+
+- 记录文件：`.link2cos_downloaded.txt`（项目根目录）
+- 格式：每行一个链接
+- 可手动编辑或删除来管理已下载记录
+
+---
+
+### Q7: sync 和 download 的区别？
+
+| 命令 | 功能 | 适用场景 |
+|------|------|---------|
+| `sync` | 下载 + 上传到 COS | 需要将文件同步到云端存储 |
+| `download` | 仅下载到本地 | 只需要本地存储，不需要云端 |
+
+两个命令都支持链接去重，共享同一个下载记录文件。
+
+---
+
+### Q8: 如何配置代理？
+
+在 `config.yaml` 中添加 `proxy` 配置：
+
+```yaml
+cos:
+  # ... 其他配置
+  proxy: "http://127.0.0.1:7890"     # HTTP 代理
+  # 或
+  proxy: "socks5://127.0.0.1:1080"   # SOCKS5 代理
+```
+
+代理仅用于文件下载，上传到 COS 不使用代理（直连更快）。
 
 ## 📚 依赖项
 

@@ -1,4 +1,4 @@
-package cmd
+package cos
 
 import (
 	"bytes"
@@ -8,16 +8,8 @@ import (
 	"os"
 	"sync"
 
+	"github.com/difyz9/Link2COS/internal/constants"
 	"github.com/tencentyun/cos-go-sdk-v5"
-)
-
-const (
-	// SmallFileSizeThreshold 小文件阈值：100MB
-	SmallFileSizeThreshold = 100 * 1024 * 1024
-	// MultipartChunkSize 分块上传的块大小：10MB
-	MultipartChunkSize = 10 * 1024 * 1024
-	// MaxConcurrentUploads 并发上传的最大数量
-	MaxConcurrentUploads = 5
 )
 
 // Uploader 文件上传器
@@ -41,7 +33,7 @@ func (u *Uploader) UploadFile(localFile, cosPath string) error {
 	fileSize := fileInfo.Size()
 
 	// 根据文件大小选择上传策略
-	if fileSize < SmallFileSizeThreshold {
+	if fileSize < constants.SmallFileSizeThreshold {
 		fmt.Printf("  策略: 内存上传 (%.2f MB)\n", float64(fileSize)/(1024*1024))
 		return u.uploadFromMemory(localFile, cosPath)
 	} else {
@@ -52,7 +44,7 @@ func (u *Uploader) UploadFile(localFile, cosPath string) error {
 
 // UploadFromReader 从Reader上传到COS（用于下载的文件）
 func (u *Uploader) UploadFromReader(reader io.Reader, cosPath string, size int64) error {
-	if size < SmallFileSizeThreshold {
+	if size < constants.SmallFileSizeThreshold {
 		// 小文件：读取到内存后上传
 		data, err := io.ReadAll(reader)
 		if err != nil {
@@ -106,7 +98,7 @@ func (u *Uploader) uploadMultipart(localFile, cosPath string, fileSize int64) er
 	uploadID := initRes.UploadID
 
 	// 计算分块数量
-	totalParts := int((fileSize + MultipartChunkSize - 1) / MultipartChunkSize)
+	totalParts := int((fileSize + constants.MultipartChunkSize - 1) / constants.MultipartChunkSize)
 	fmt.Printf("  总分块数: %d\n", totalParts)
 
 	// 并发上传分块
@@ -117,7 +109,7 @@ func (u *Uploader) uploadMultipart(localFile, cosPath string, fileSize int64) er
 	}
 
 	resultChan := make(chan partResult, totalParts)
-	semaphore := make(chan struct{}, MaxConcurrentUploads)
+	semaphore := make(chan struct{}, constants.MaxConcurrentUploads)
 	var wg sync.WaitGroup
 
 	// 上传所有分块
@@ -131,8 +123,8 @@ func (u *Uploader) uploadMultipart(localFile, cosPath string, fileSize int64) er
 			defer func() { <-semaphore }()
 
 			// 读取分块数据
-			offset := int64(pn-1) * MultipartChunkSize
-			size := MultipartChunkSize
+			offset := int64(pn-1) * constants.MultipartChunkSize
+			size := constants.MultipartChunkSize
 			if offset+int64(size) > fileSize {
 				size = int(fileSize - offset)
 			}
